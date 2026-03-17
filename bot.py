@@ -15,45 +15,44 @@ def run_bot():
             cred = credentials.Certificate(key_dict)
             firebase_admin.initialize_app(cred, {'databaseURL': firebase_url})
 
-        # Cricbuzz Live Scores Page
-        url = "https://www.cricbuzz.com/live-cricket-scores" 
-        headers = {'User-Agent': 'Mozilla/5.0'}
+        url = "https://www.cricbuzz.com/cricket-match/live-scores"
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Match Card dhoondna
-        match_card = soup.find('div', class_='cb-mtch-lst')
+        # Sabse pehla match header dhoondna
+        match_header = soup.find('h3', class_='cb-lv-scr-mtch-hdr') or soup.find('h2')
         
-        if match_card:
-            # 1. Team Names (e.g., RCB vs SRH)
-            teams = match_card.find('h3').text if match_card.find('h3') else "Match Update"
+        if match_header:
+            teams = match_header.text
             
-            # 2. Score (Agar match shuru nahi hua toh ye empty hoga)
-            score_box = match_card.find('div', class_='cb-scr-wkt-bat')
-            score = score_box.text if score_box else "0/0 (0.0)"
+            # Score aur Status ke liye wide search
+            status = "Check Cricbuzz for details"
+            status_element = soup.find('div', class_='cb-text-live') or \
+                             soup.find('div', class_='cb-text-preview') or \
+                             soup.find('div', class_='cb-mtch-cptn')
             
-            # 3. Status (Yahan "Toss" ki details milti hain)
-            # Cricbuzz par 'cb-text-preview' ya 'cb-text-live' mein details hoti hain
-            status = "Match Details Loading..."
-            status_div = match_card.find('div', class_='cb-text-live') or \
-                         match_card.find('div', class_='cb-text-preview') or \
-                         match_card.find('div', class_='cb-mtch-cptn')
-            
-            if status_div:
-                status = status_div.text
+            if status_element:
+                status = status_element.text
 
-            # Firebase mein update karna
+            score = "Toss/Live Soon"
+            score_element = soup.find('div', class_='cb-scr-wkt-bat')
+            if score_element:
+                score = score_element.text
+
+            # Firebase Update
             ref = db.reference('matches/match_01/live_score')
             ref.update({
                 'teams': teams,
                 'runs': score,
                 'status': status,
-                'last_updated': "Toss/Live Update"
+                'last_updated': "Live from Server"
             })
-            print(f"Success: {teams} | Status: {status}")
+            print(f"Match Found: {teams} | Status: {status}")
         else:
-            print("No Match Card found. Shyad abhi koi match schedule nahi hai.")
+            print("Still no match card found. Link is active but structure is different.")
+            db.reference('matches/match_01/live_score').update({'status': 'Robot searching...'})
 
     except Exception as e:
         print(f"Bot Error: {e}")
