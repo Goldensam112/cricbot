@@ -16,30 +16,34 @@ def run_bot():
             firebase_admin.initialize_app(cred, {'databaseURL': firebase_url})
 
         url = "https://www.cricbuzz.com/cricket-match/live-scores"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+        headers = {'User-Agent': 'Mozilla/5.0'}
         
         response = requests.get(url, headers=headers)
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        # Sabse pehla match header dhoondna
-        match_header = soup.find('h3', class_='cb-lv-scr-mtch-hdr') or soup.find('h2')
+        # Sabse pehla Match Card dhoondna (Videos ko skip karke)
+        match_card = soup.find('div', class_='cb-mtch-lst')
         
-        if match_header:
-            teams = match_header.text
+        if match_card:
+            # Team names nikalna (Header se)
+            teams = match_card.find('h3').text if match_card.find('h3') else "Match Update"
             
-            # Score aur Status ke liye wide search
-            status = "Check Cricbuzz for details"
-            status_element = soup.find('div', class_='cb-text-live') or \
-                             soup.find('div', class_='cb-text-preview') or \
-                             soup.find('div', class_='cb-mtch-cptn')
-            
-            if status_element:
-                status = status_element.text
+            # Agar "Featured Videos" jaisa kuch mile toh use filter kar do
+            if "VIDEO" in teams.upper():
+                print("Video card detected, skipping...")
+                return
 
-            score = "Toss/Live Soon"
-            score_element = soup.find('div', class_='cb-scr-wkt-bat')
+            score = "0/0 (0.0)"
+            score_element = match_card.find('div', class_='cb-scr-wkt-bat')
             if score_element:
                 score = score_element.text
+
+            status = "Match Details Loading..."
+            status_element = match_card.find('div', class_='cb-text-live') or \
+                             match_card.find('div', class_='cb-text-preview') or \
+                             match_card.find('div', class_='cb-mtch-cptn')
+            if status_element:
+                status = status_element.text
 
             # Firebase Update
             ref = db.reference('matches/match_01/live_score')
@@ -49,10 +53,9 @@ def run_bot():
                 'status': status,
                 'last_updated': "Live from Server"
             })
-            print(f"Match Found: {teams} | Status: {status}")
+            print(f"Success: {teams} updated!")
         else:
-            print("Still no match card found. Link is active but structure is different.")
-            db.reference('matches/match_01/live_score').update({'status': 'Robot searching...'})
+            print("No valid match card found.")
 
     except Exception as e:
         print(f"Bot Error: {e}")
